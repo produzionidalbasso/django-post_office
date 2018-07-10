@@ -1,6 +1,10 @@
+# -*- coding: utf-8 -*-
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files import File
+from django.template import Template, Context
 from django.utils.encoding import force_text
 
 from post_office import cache
@@ -9,6 +13,7 @@ from .models import Email, PRIORITY, STATUS, EmailTemplate, Attachment
 from .settings import get_default_priority
 from .validators import validate_email_with_name
 
+logger = logging.getLogger(__name__)
 
 def send_mail(subject, message, from_email, recipient_list, html_message='',
               scheduled_time=None, headers=None, priority=PRIORITY.medium):
@@ -136,3 +141,85 @@ def parse_emails(emails):
             raise ValidationError('%s is not a valid email address' % email)
 
     return emails
+
+
+def render_to_template_email(content='', context=None):
+    try:
+        template_object = Template(content)
+        context_object = Context(context or {})
+        return template_object.render(context_object)
+    except UnicodeEncodeError as ex:
+        logger.exception("Unicode error in render_to_template_email")
+        return "Preview unavailable"
+    except Exception as     ex:
+        logger.exception("Error in render_to_template_email")
+        return "Preview unavailable"
+
+def get_template_blocks(template_path="post_office/base_mail.html"):
+    from django.template import Context, Engine, TemplateDoesNotExist, loader
+    from django.template.base import (
+        TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,
+        Lexer)
+    from django.core.files.base import ContentFile
+    #from pygments import highlight
+    #from pygments.lexers import HtmlDjangoLexer
+    #from pygments.formatters import HtmlFormatter
+    template_dirs = settings.TEMPLATES[0]['DIRS']
+    engine = Engine(dirs=template_dirs)
+    html = engine.get_template(template_path).source
+
+    #html = loader.get_template(template_path).render()
+    _token_opened = False
+    _token_closed = False
+    _token_block_name = ''
+    for t in Lexer(html).tokenize():
+        print("-------------------------------\ntype:{0}\n** CONTENT **\n{1}\n## SPLIT CONTENTS {2}"
+              "".format(t.token_type, t.contents, t.split_contents()))
+        """
+        es. 
+        {% block content %}fuffa 2{% endblock content %}
+        
+        ...
+        -------------------------------
+        type:2
+        ** CONTENT **
+        block content
+        ## SPLIT CONTENTS ['block', 'content']
+        -------------------------------
+        type:0
+        ** CONTENT **
+        fuffa content
+        ## SPLIT CONTENTS ['fuffa', '2']
+        -------------------------------
+        type:2
+        ** CONTENT **
+        endblock content
+        ## SPLIT CONTENTS ['endblock', 'content']
+        -------------------------------
+        ...
+        
+        """
+        #_tokens =
+        if t.token_type == TOKEN_BLOCK:
+            if t.split_contents()[0] == 'block':
+                _token_opened = True
+                _token_block_name = t.split_contents()[1]
+                _tokens.append(_token_block_name)
+            elif t.split_contents()[0] == 'endblock':
+                _token_closed = True
+                try:
+                    _token_block_name = t.split_contents()[1]
+                except IndexError:
+                    _token_block_name = _token_block_name
+
+
+
+            if _token_opened:
+                _token_opened = False
+                try:
+                    _token_block_name = t.split_contents()[1]
+                except IndexError:
+                    _token_block_name = ''
+            else:
+                _token_opened = True
+                _token_block_name = t.split_contents()[1]

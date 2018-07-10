@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+import logging
 
 from collections import namedtuple
 from uuid import uuid4
 
+from django.conf import settings
 from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.db import models
 from django.template import Context, Template
@@ -17,9 +19,10 @@ from post_office.fields import CommaSeparatedEmailField
 
 from .compat import text_type, smart_text
 from .connections import connections
-from .settings import context_field_class, get_log_level
+from .settings import context_field_class, get_log_level, POSTOFFICE_TEMPLATES
 from .validators import validate_email_with_name, validate_template_syntax
 
+logger = logging.getLogger(__name__)
 
 PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
 STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
@@ -40,7 +43,7 @@ class Email(models.Model):
                                   validators=[validate_email_with_name])
     to = CommaSeparatedEmailField(_("Email To"))
     cc = CommaSeparatedEmailField(_("Cc"))
-    bcc = CommaSeparatedEmailField(_("Bcc"))
+    bcc = CommaSeparatedEmailField(("Bcc"))
     subject = models.CharField(_("Subject"), max_length=989, blank=True)
     message = models.TextField(_("Message"), blank=True)
     html_message = models.TextField(_("HTML Message"), blank=True)
@@ -60,8 +63,8 @@ class Email(models.Model):
     last_updated = models.DateTimeField(db_index=True, auto_now=True)
     scheduled_time = models.DateTimeField(_('The scheduled sending time'),
                                           blank=True, null=True, db_index=True)
-    headers = JSONField(_('Headers'), blank=True, null=True)
-    template = models.ForeignKey('post_office.EmailTemplate', blank=True,
+    headers = JSONField(_('Headers'),blank=True, null=True)
+    template = models.ForeignKey('post_office.EmailTemplate', blank=True, 
                                  null=True, verbose_name=_('Email template'),
                                  on_delete=models.CASCADE)
     context = context_field_class(_('Context'), blank=True, null=True)
@@ -96,7 +99,7 @@ class Email(models.Model):
         """
         subject = smart_text(self.subject)
 
-        if self.template is not None:
+        if self.template is not None:# and self.context is not None:
             _context = Context(self.context)
             subject = Template(self.template.subject).render(_context)
             message = Template(self.template.content).render(_context)
@@ -183,9 +186,9 @@ class Log(models.Model):
     email = models.ForeignKey(Email, editable=False, related_name='logs',
                               verbose_name=_('Email address'), on_delete=models.CASCADE)
     date = models.DateTimeField(auto_now_add=True)
-    status = models.PositiveSmallIntegerField(_('Status'), choices=STATUS_CHOICES)
-    exception_type = models.CharField(_('Exception type'), max_length=255, blank=True)
-    message = models.TextField(_('Message'))
+    status = models.PositiveSmallIntegerField(_('Status'),choices=STATUS_CHOICES)
+    exception_type = models.CharField(_('Exception type'),max_length=255, blank=True)
+    message = models.TextField(_('Message'), blank=True)
 
     class Meta:
         app_label = 'post_office'
@@ -206,9 +209,12 @@ class EmailTemplate(models.Model):
     """
     Model to hold template information from db
     """
-    name = models.CharField(_('Name'), max_length=255, help_text=_("e.g: 'welcome_email'"))
+    TEMPLATE_CHOICES = POSTOFFICE_TEMPLATES
+
+    label = models.CharField(_("Label"), max_length=255, blank=True)
+    name = models.CharField(_('Name'),max_length=255, help_text=_("e.g: 'welcome_email'"))
     description = models.TextField(_('Description'), blank=True,
-                                   help_text=_("Description of this template."))
+        help_text=_("Description of this template."))
     created = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
     subject = models.CharField(max_length=255, blank=True,
@@ -224,6 +230,11 @@ class EmailTemplate(models.Model):
     default_template = models.ForeignKey('self', related_name='translated_templates',
         null=True, default=None, verbose_name=_('Default template'), on_delete=models.CASCADE)
 
+    template = models.CharField(_("template"), max_length=100, choices=TEMPLATE_CHOICES,
+                                help_text=_('The mail template used to render the content.'),
+                                default=TEMPLATE_CHOICES[0][0])
+    
+
     objects = EmailTemplateManager()
 
     class Meta:
@@ -231,7 +242,6 @@ class EmailTemplate(models.Model):
         unique_together = ('name', 'language', 'default_template')
         verbose_name = _("Email Template")
         verbose_name_plural = _("Email Templates")
-        ordering = ['name']
 
     def __str__(self):
         return u'%s %s' % (self.name, self.language)
@@ -239,14 +249,38 @@ class EmailTemplate(models.Model):
     def natural_key(self):
         return (self.name, self.language, self.default_template)
 
+    def transform_html_to_plain(self, html_content):
+        try:
+            import html2text
+            return html2text.html2text(self.html_content)
+        except ImportError:
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html_content)
+                return soup.get_text()
+            except ImportError:
+                logger.warning("Install BeautifulSoup or html2text to render properly email plain content ")
+                return html_content
+
+
     def save(self, *args, **kwargs):
         # If template is a translation, use default template's name
         if self.default_template and not self.name:
             self.name = self.default_template.name
 
+        if not self.message_content and self.html_message_content:
+            self.message_content = self.transform_html_to_plain(self.html_message_content)
+        # here we have to port :
+        # self.message_content -> self.content
+        # self.html_message_content -> self.html_content
+        if not self.content and self.html_content:
+            self.content = self.transform_html_to_plain(self.html_content)
+
         template = super(EmailTemplate, self).save(*args, **kwargs)
         cache.delete(self.name)
         return template
+
+
 
 
 def get_upload_path(instance, filename):
@@ -265,16 +299,35 @@ class Attachment(models.Model):
     """
     A model describing an email attachment.
     """
-    file = models.FileField(_('File'), upload_to=get_upload_path)
-    name = models.CharField(_('Name'), max_length=255, help_text=_("The original filename"))
+    file = models.FileField(_('File'),upload_to=get_upload_path)
+    name = models.CharField(_('Name'),max_length=255, help_text=_("The original filename"))
     emails = models.ManyToManyField(Email, related_name='attachments',
-                                    verbose_name=_('Email addresses'))
+                                    verbose_name=_('Emails'))
     mimetype = models.CharField(max_length=255, default='', blank=True)
 
     class Meta:
         app_label = 'post_office'
         verbose_name = _("Attachment")
         verbose_name_plural = _("Attachments")
+
+    def __str__(self):
+        return self.name
+
+
+@python_2_unicode_compatible
+class AttachmentTemplate(models.Model):
+    file = models.FileField(_('File'), upload_to=get_upload_path)
+    name = models.CharField(_('Name'), max_length=255, help_text=_("The original filename"))
+    email_templates = models.ManyToManyField(EmailTemplate, related_name='attachments',
+                                    verbose_name=_('Email templates'))
+    mimetype = models.CharField(max_length=255, default='', blank=True)
+
+    #template_emails = models.ManyToManyField(EmailTemplate, related_name='attachment_templates')
+
+    class Meta:
+        app_label = 'post_office'
+        verbose_name = _('Attachment Template')
+        verbose_name_plural = _('Attachments Template')
 
     def __str__(self):
         return self.name

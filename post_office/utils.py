@@ -1,17 +1,19 @@
 # -*- coding: utf-8 -*-
 import logging
 
+from django.apps import apps
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.core.files import File
 from django.template import Template, Context
 from django.utils.encoding import force_text
 
 from post_office import cache
 from .compat import string_types
-from .models import Email, PRIORITY, STATUS, EmailTemplate, Attachment
-from .settings import get_default_priority
+from .settings import get_default_priority, PRIORITY, STATUS
 from .validators import validate_email_with_name
+
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +29,7 @@ def send_mail(subject, message, from_email, recipient_list, html_message='',
     emails = []
     for address in recipient_list:
         emails.append(
-            Email.objects.create(
+            apps.get_model('post_office.Email').objects.create(
                 from_email=from_email, to=address, subject=subject,
                 message=message, html_message=html_message, status=status,
                 headers=headers, priority=priority, scheduled_time=scheduled_time
@@ -47,15 +49,16 @@ def get_email_template(name, language=''):
     if use_cache:
         use_cache = getattr(settings, 'POST_OFFICE_TEMPLATE_CACHE', True)
     if not use_cache:
-        return EmailTemplate.objects.get(name=name, language=language)
+        return apps.get_model('post_office.EmailTemplate').objects.get(name=name,
+                                                                       language=language)
     else:
         composite_name = '%s:%s' % (name, language)
         email_template = cache.get(composite_name)
         if email_template is not None:
             return email_template
         else:
-            email_template = EmailTemplate.objects.get(name=name,
-                                                       language=language)
+            email_template = apps.get_model('post_office.EmailTemplate').objects.get(
+                name=name, language=language)
             cache.set(composite_name, email_template)
             return email_template
 
@@ -95,7 +98,7 @@ def create_attachments(attachment_files):
             opened_file = open(content, 'rb')
             content = File(opened_file)
 
-        attachment = Attachment()
+        attachment = apps.get_model('post_office.Attachment')
         if mimetype:
             attachment.mimetype = mimetype
         attachment.file.save(filename, content=content, save=True)
@@ -139,21 +142,85 @@ def parse_emails(emails):
             validate_email_with_name(email)
         except ValidationError:
             raise ValidationError('%s is not a valid email address' % email)
-
     return emails
 
 
-def render_to_template_email(content='', context=None):
+def render_to_template_email(content='', context=None, is_plain_text=False):
     try:
         template_object = Template(content)
         context_object = Context(context or {})
-        return template_object.render(context_object)
-    except UnicodeEncodeError as ex:
-        logger.exception("Unicode error in render_to_template_email")
+        template = template_object.render(context_object)
+        if is_plain_text:
+            template = transform_html_to_plain(template)
+            print("plain template: {0}".format(template))
+        return template
+    except Exception as ex:
+        print("content : {0}".format(content))
+        warnings.warn(
+            "Error in render_to_template_email : {0}".format(ex),
+            RuntimeWarning
+        )
         return "Preview unavailable"
-    except Exception as     ex:
-        logger.exception("Error in render_to_template_email")
-        return "Preview unavailable"
+
+
+
+def transform_html_to_plain(html_content):
+    try:
+        import html2text
+        return html2text.html2text(html_content)
+    except ImportError:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_content)
+            return soup.get_text()
+        except ImportError:
+            pass
+    warnings.warn(
+        "Install html2text or BeautifulSoup to render properly email plain content",
+        RuntimeWarning
+    )
+    return html_content
+
+def make_raw_template(template_path, content, block_name="content"):
+    """
+    function that returns templates who overrides from `template_path` and inject content in the template_path's
+    block `block_name`, loading same template_tags and filters used by `template_path`
+    :param template_path:
+    :param content:
+    :param block_name:
+    :return: template
+    """
+    template_path = "post_office/base_mail.html"
+    from django.template import Context, Engine, TemplateDoesNotExist, loader
+    from django.template.base import (
+        TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,
+        Lexer)
+    from django.core.files.base import ContentFile
+    # from pygments import highlight
+    # from pygments.lexers import HtmlDjangoLexer
+    # from pygments.formatters import HtmlFormatter
+    template_dirs = settings.TEMPLATES[0]['DIRS']
+    engine = Engine.get_default()
+    html = engine.get_template(template_path).source
+
+    load_string = ""
+    block_content_found = False
+    for token_block in Lexer(html).tokenize():
+        if token_block.token_type == TOKEN_BLOCK:
+            if token_block.split_contents()[0] == 'load':
+                load_string += "{{% {load_str} %}}".format(load_str=token_block.contents)
+            elif (token_block.split_contents()[0] == 'block' and
+                  token_block.split_contents()[1] == block_name):
+                block_content_found = True
+
+    if not block_content_found:
+        raise ImproperlyConfigured("`{{% block {block_name} %}}` not found in selected template"
+                                   "".format(block_name=block_name))
+    raw_template = "{{% extends '{template_path}' %}}".format(template_path=template_path)
+    raw_template += load_string
+    raw_template += ("{{% block {block_name} %}}{content}{{% endblock {block_name} %}}"
+                     "".format(content=content, block_name=block_name))
+    return raw_template
 
 def get_template_blocks(template_path="post_office/base_mail.html"):
     from django.template import Context, Engine, TemplateDoesNotExist, loader
@@ -177,7 +244,7 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
               "".format(t.token_type, t.contents, t.split_contents()))
         """
         es. 
-        {% block content %}fuffa 2{% endblock content %}
+        {% block content %}lorem 2{% endblock content %}
         
         ...
         -------------------------------
@@ -189,7 +256,7 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
         type:0
         ** CONTENT **
         fuffa content
-        ## SPLIT CONTENTS ['fuffa', '2']
+        ## SPLIT CONTENTS ['lorem', '2']
         -------------------------------
         type:2
         ** CONTENT **
@@ -199,7 +266,7 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
         ...
         
         """
-        #_tokens =
+        _tokens = []
         if t.token_type == TOKEN_BLOCK:
             if t.split_contents()[0] == 'block':
                 _token_opened = True
@@ -211,9 +278,6 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
                     _token_block_name = t.split_contents()[1]
                 except IndexError:
                     _token_block_name = _token_block_name
-
-
-
             if _token_opened:
                 _token_opened = False
                 try:

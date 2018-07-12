@@ -13,7 +13,7 @@ from .models import Email, EmailTemplate, Log, PRIORITY, STATUS
 from .settings import (get_available_backends, get_batch_size,
                        get_log_level, get_sending_order, get_threads_per_process)
 from .utils import (get_email_template, parse_emails, parse_priority,
-                    split_emails, create_attachments)
+                    split_emails, create_attachments, transform_html_to_plain)
 from .logutils import setup_loghandlers
 
 
@@ -64,6 +64,8 @@ def create(sender, recipients=None, cc=None, bcc=None, subject='', message='',
         subject = Template(subject).render(_context)
         message = Template(message).render(_context)
         html_message = Template(html_message).render(_context)
+        if template and message == html_message:
+            message = transform_html_to_plain(html_message)
 
         email = Email(
             from_email=sender,

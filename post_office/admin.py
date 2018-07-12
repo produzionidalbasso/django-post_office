@@ -163,7 +163,7 @@ class EmailTemplateInline(admin.StackedInline):
 
 class EmailTemplateAdmin(admin.ModelAdmin):
     form = EmailTemplateAdminForm
-    list_display = ('label', 'name', 'description_shortened', 'subject', 'languages_compact', 'created')
+    list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
     readonly_fields = ('display_plain_mail_preview', 'display_html_mail_preview',)
 
@@ -173,27 +173,28 @@ class EmailTemplateAdmin(admin.ModelAdmin):
                 ('name',),
                 ('label', 'description'),
             )}),
-            (_("Default Content"), {
-                'fields': (
-                    ('subject',),
-                    ('message_content',),
-                    ('message_html_content',),
-                )}),
-            (_("Preview"), {
+        (_("Default Content"), {
             'fields': (
-                ('display_plain_mail_preview','display_html_mail_preview'),
+                ('template_path',),
+                ('subject',),
+                ('content_data',),
             )}),
-            (_("Developer data"), {
-                'classes': ('collapse',),
-
-                'fields': (
-                    ('mail_preview',),
+        (_("Preview"), {
+            'fields': (
+                ('display_plain_mail_preview',
+                 'display_html_mail_preview'),
             )}),
     )
     inlines = (EmailTemplateInline, AttachmentTemplateInline) if settings.USE_I18N else (AttachmentTemplateInline,)
     formfield_overrides = {
         models.CharField: {'widget': SubjectField}
     }
+
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == 'template_path':
+            kwargs.update({'initial':EmailTemplate.TEMPLATE_CHOICES[0][0]})
+        return super(EmailTemplateAdmin,self).formfield_for_dbfield(db_field, request, **kwargs)
 
     def get_queryset(self, request):
         return self.model.objects.filter(default_template__isnull=True)
@@ -210,34 +211,32 @@ class EmailTemplateAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         obj.save()
-
         # if the name got changed, also change the translated templates to match again
         if 'name' in form.changed_data:
             obj.translated_templates.update(name=obj.name)
 
-    def _display_mail_preview(self, obj, input_field, output_field):
-        content_preview = input_field.replace('{{', '{').replace('}}', '}')
+    def display_html_mail_preview(self,obj=None):
+        content_preview = obj.html_content.replace('{{', '{').replace('}}', '}')
         context = {}
-        content_preview = postoffice_settings.POSTOFFICE_TEMPLATE_LIBS_TO_LOAD + content_preview
         content_preview = render_to_template_email(content_preview, context)
         context.update({'content': content_preview})
-        html_content_preview = render_to_template_email(output_field, context)
         help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
         return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
-                            ".format(**{'help_text': help_text,
-                                        'mail_message': escape(strip_spaces_between_tags(html_content_preview))})))
-
-    def display_html_mail_preview(self,obj=None):
-        input_field = obj.html_message_content
-        output_field = obj.html_content
-        return self._display_mail_preview(obj, input_field, output_field)
+                                    ".format(**{'help_text': help_text,
+                                                'mail_message': escape(strip_spaces_between_tags(content_preview))})))
     display_html_mail_preview.allow_tags=True
     display_html_mail_preview.short_description=_("Preview HTML")
 
     def display_plain_mail_preview(self,obj=None):
-        input_field = obj.message_content
-        output_field = obj.content
-        return self._display_mail_preview(obj, input_field, output_field)
+        content_preview = obj.content.replace('{{', '{').replace('}}', '}')
+        context = {}
+        content_preview = render_to_template_email(content_preview, context, is_plain_text=True)
+        context.update({'content': content_preview})
+        help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
+        return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
+                                            ".format(**{'help_text': help_text,
+                                                        'mail_message': escape(
+                                                            strip_spaces_between_tags(content_preview))})))
     display_plain_mail_preview.allow_tags=True
     display_plain_mail_preview.short_description=_("Preview Plain")
 

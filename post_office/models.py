@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 import logging
 
-from collections import namedtuple
+
 from uuid import uuid4
 
 from django.conf import settings
@@ -16,16 +16,16 @@ from jsonfield import JSONField
 
 from post_office import cache
 from post_office.fields import CommaSeparatedEmailField
+from post_office.utils import transform_html_to_plain, make_raw_template
 
 from .compat import text_type, smart_text
 from .connections import connections
-from .settings import context_field_class, get_log_level, POSTOFFICE_TEMPLATES
+from .settings import context_field_class, get_log_level, POSTOFFICE_TEMPLATES, PRIORITY, STATUS
 from .validators import validate_email_with_name, validate_template_syntax
 
 logger = logging.getLogger(__name__)
 
-PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
-STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
+
 
 
 @python_2_unicode_compatible
@@ -230,10 +230,18 @@ class EmailTemplate(models.Model):
     default_template = models.ForeignKey('self', related_name='translated_templates',
         null=True, default=None, verbose_name=_('Default template'), on_delete=models.CASCADE)
 
-    template = models.CharField(_("template"), max_length=100, choices=TEMPLATE_CHOICES,
+    template_path = models.CharField(_("template"), max_length=100, choices=TEMPLATE_CHOICES,
                                 help_text=_('The mail template used to render the content.'),
-                                default=TEMPLATE_CHOICES[0][0])
-    
+                                #default=TEMPLATE_CHOICES[0][0],
+                                blank=True)
+
+    content_data = models.TextField(verbose_name=_("Content"), validators=[validate_template_syntax],
+                                    blank=True,
+                                    help_text=_("The fields between '{{' and '}}' are the variables while the text that is included in the tags '{% comment%}' and '{% endcomment%}' will not be rendered in the mail \
+                                                                                    <br/> Do not remove the fields included in the tags '{%' '%}'")
+                                    )
+
+
 
     objects = EmailTemplateManager()
 
@@ -249,36 +257,21 @@ class EmailTemplate(models.Model):
     def natural_key(self):
         return (self.name, self.language, self.default_template)
 
-    def transform_html_to_plain(self, html_content):
-        try:
-            import html2text
-            return html2text.html2text(self.html_content)
-        except ImportError:
-            try:
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(html_content)
-                return soup.get_text()
-            except ImportError:
-                logger.warning("Install BeautifulSoup or html2text to render properly email plain content ")
-                return html_content
-
+    def update_mail_content(self):
+        if self.content_data:
+            self.html_content = make_raw_template(self.template_path,
+                                                  content=self.content_data)
+            self.content = self.html_content
+    update_mail_content.alters_data = True
 
     def save(self, *args, **kwargs):
         # If template is a translation, use default template's name
         if self.default_template and not self.name:
             self.name = self.default_template.name
-
-        if not self.message_content and self.html_message_content:
-            self.message_content = self.transform_html_to_plain(self.html_message_content)
-        # here we have to port :
-        # self.message_content -> self.content
-        # self.html_message_content -> self.html_content
-        if not self.content and self.html_content:
-            self.content = self.transform_html_to_plain(self.html_content)
-
-        template = super(EmailTemplate, self).save(*args, **kwargs)
+        self.update_mail_content()
+        obj = super(EmailTemplate, self).save(*args, **kwargs)
         cache.delete(self.name)
-        return template
+        return obj
 
 
 

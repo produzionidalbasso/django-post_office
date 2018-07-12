@@ -3,6 +3,7 @@ import warnings
 from django.conf import settings
 from django.core.cache.backends.base import InvalidCacheBackendError
 
+from collections import namedtuple
 from .compat import import_attribute, get_cache
 
 
@@ -105,3 +106,6 @@ POSTOFFICE_TEMPLATES_DEFAULT = (
 )
 POSTOFFICE_TEMPLATES = getattr(settings,'POSTOFFICE_TEMPLATES',
                                POSTOFFICE_TEMPLATES_DEFAULT)
+
+PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
+STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))

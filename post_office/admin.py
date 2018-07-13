@@ -4,6 +4,7 @@ from django import forms
 from django.db import models
 from django.contrib import admin
 from django.conf import settings
+from django.forms import BaseInlineFormSet, widgets
 from django.forms.widgets import TextInput
 from django.template.defaultfilters import safe
 from django.utils import six
@@ -138,34 +139,73 @@ class SubjectField(TextInput):
 class EmailTemplateAdminForm(forms.ModelForm):
 
     language = forms.ChoiceField(choices=settings.LANGUAGES, required=False,
+                                 widget=widgets.HiddenInput,
                                  help_text=_("Render template in alternative language"),
                                  label=_("Language"))
 
     class Meta:
         model = EmailTemplate
-        fields = ('name', 'description', 'subject',
-                  'content', 'html_content', 'language', 'default_template')
+        exclude=()
+        #fields = ('name', 'description', 'subject',
+        #          'content', 'html_content', 'language', 'default_template')
 
+class EmailTemplateInlineFormset(BaseInlineFormSet):
+    def __init__(self, *args, **kwargs):
+        if settings.USE_I18N:
+            initial = kwargs.get('initial',[])
+            languages = dict(settings.LANGUAGES).keys()
+            for ix,language in enumerate(languages):
+                try:
+                    initial[ix].update({'language':language})
+                except IndexError:
+                    initial.append({'language': language})
+            kwargs.update({'initial':initial})
+        return super(EmailTemplateInlineFormset,self).__init__(*args, **kwargs)
 
 class EmailTemplateInline(admin.StackedInline):
     form = EmailTemplateAdminForm
+    formset = EmailTemplateInlineFormset
     model = EmailTemplate
-    extra = 0
-    fields = ('language', 'subject', 'content', 'html_content',)
+    #extra = 0
+    fields = ('language', 'template_path',
+              'subject', 'content_data',
+              'display_html_mail_preview', )#''content', 'html_content',)
     formfield_overrides = {
         models.CharField: {'widget': SubjectField}
     }
+    readonly_fields=('display_html_mail_preview',)
     fk_name = 'default_template'
+
+    def get_extra(self, request, obj=None, **kwargs):
+        """Hook for customizing the number of extra inline forms."""
+        return len(settings.LANGUAGES) - obj.translated_templates.count()
 
     def get_max_num(self, request, obj=None, **kwargs):
         return len(settings.LANGUAGES)
 
+    def display_html_mail_preview(self,obj=None):
+        print("obj : {0}".format(obj))
+        content_preview = obj.html_content or (obj.default_template and obj.default_template.html_content) or ""
+        content_preview = content_preview.replace('{{', '{').replace('}}', '}')
+        context = {}
+        content_preview = render_to_template_email(content_preview, context)
+        context.update({'content': content_preview})
+        help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
+        return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
+                                    ".format(**{'help_text': help_text,
+                                                'mail_message': escape(strip_spaces_between_tags(content_preview))})))
+    display_html_mail_preview.allow_tags=True
+    display_html_mail_preview.short_description=_("Preview HTML")
 
 class EmailTemplateAdmin(admin.ModelAdmin):
     form = EmailTemplateAdminForm
     list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
     readonly_fields = ('display_plain_mail_preview', 'display_html_mail_preview',)
+    if settings.USE_I18N:
+        inlines = (EmailTemplateInline, AttachmentTemplateInline)
+    else:
+        inlines = (AttachmentTemplateInline,)
 
     fieldsets = (
         (None, {
@@ -181,11 +221,10 @@ class EmailTemplateAdmin(admin.ModelAdmin):
             )}),
         (_("Preview"), {
             'fields': (
-                ('display_plain_mail_preview',
+                (#'display_plain_mail_preview',
                  'display_html_mail_preview'),
             )}),
     )
-    inlines = (EmailTemplateInline, AttachmentTemplateInline) if settings.USE_I18N else (AttachmentTemplateInline,)
     formfield_overrides = {
         models.CharField: {'widget': SubjectField}
     }
@@ -216,7 +255,8 @@ class EmailTemplateAdmin(admin.ModelAdmin):
             obj.translated_templates.update(name=obj.name)
 
     def display_html_mail_preview(self,obj=None):
-        content_preview = obj.html_content.replace('{{', '{').replace('}}', '}')
+        content_preview = obj.html_content
+        content_preview = content_preview.replace('{{', '{').replace('}}', '}')
         context = {}
         content_preview = render_to_template_email(content_preview, context)
         context.update({'content': content_preview})
@@ -243,6 +283,44 @@ class EmailTemplateAdmin(admin.ModelAdmin):
 
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'file', )
+
+
+
+'''
+class TabbedDjangoJqueryTranslationAdmin(TranslationAdmin):
+    """
+    Convenience class which includes the necessary media files for tabbed
+    translation fields. Reuses Django's internal jquery version.
+    """
+    class Media:
+        js = (
+            'modeltranslation/js/force_jquery.js',
+            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
+            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
+            'modeltranslation/js/tabbed_translation_fields.js',
+        )
+        css = {
+            'all': ('modeltranslation/css/tabbed_translation_fields.css',),
+        }
+
+
+class TabbedExternalJqueryTranslationAdmin(TranslationAdmin):
+    """
+    Convenience class which includes the necessary media files for tabbed
+    translation fields. Loads recent jquery version from a cdn.
+    """
+    class Media:
+        js = (
+            '//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js',
+            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
+            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
+            'modeltranslation/js/tabbed_translation_fields.js',
+        )
+        css = {
+            'screen': ('modeltranslation/css/tabbed_translation_fields.css',),
+        }
+
+'''
 
 
 admin.site.register(Email, EmailAdmin)

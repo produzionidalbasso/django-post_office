@@ -56,9 +56,9 @@ def create(sender, recipients=None, cc=None, bcc=None, subject='', message='',
     else:
 
         if template:
-            subject = template.subject
-            message = template.content
-            html_message = template.html_content
+            subject = template.subject or (template.default_template and template.default_template.subject) or ""
+            message = template.content or (template.default_template and template.default_template.content) or ""
+            html_message = template.html_content or (template.default_template and template.default_template.html_content) or ""
 
         _context = Context(context or {})
         subject = Template(subject).render(_context)

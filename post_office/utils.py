@@ -190,7 +190,8 @@ def make_raw_template(template_path, content, block_name="content"):
     :param block_name:
     :return: template
     """
-    template_path = "post_office/base_mail.html"
+    #template_path = template_path or "post_office/base_mail.html"
+    print("template_path : {0}".format(template_path))
     from django.template import Context, Engine, TemplateDoesNotExist, loader
     from django.template.base import (
         TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,

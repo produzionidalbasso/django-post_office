@@ -259,21 +259,24 @@ class EmailTemplate(models.Model):
 
     def update_mail_content(self):
         if self.content_data:
-            self.html_content = make_raw_template(self.template_path,
+            self.content = self.html_content = make_raw_template(self.template_path,
                                                   content=self.content_data)
-            self.content = self.html_content
+        else:
+            self.html_content = self.content = ""
+
     update_mail_content.alters_data = True
 
     def save(self, *args, **kwargs):
         # If template is a translation, use default template's name
-        if self.default_template and not self.name:
-            self.name = self.default_template.name
+        if self.default_template:
+            if not self.name:
+                self.name = self.default_template.name
+            if not self.template_path:
+                self.template_path = self.default_template.template_path
         self.update_mail_content()
         obj = super(EmailTemplate, self).save(*args, **kwargs)
         cache.delete(self.name)
         return obj
-
-
 
 
 def get_upload_path(instance, filename):

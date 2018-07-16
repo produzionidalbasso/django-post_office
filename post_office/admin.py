@@ -178,7 +178,10 @@ class EmailTemplateInline(admin.StackedInline):
 
     def get_extra(self, request, obj=None, **kwargs):
         """Hook for customizing the number of extra inline forms."""
-        return len(settings.LANGUAGES) - obj.translated_templates.count()
+        if obj:
+            return len(settings.LANGUAGES) - obj.translated_templates.count()
+        else:
+            return len(settings.LANGUAGES)
 
     def get_max_num(self, request, obj=None, **kwargs):
         return len(settings.LANGUAGES)

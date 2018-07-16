@@ -183,6 +183,7 @@ class EmailTemplateInline(admin.StackedInline):
         else:
             return len(settings.LANGUAGES)
 
+
     def get_max_num(self, request, obj=None, **kwargs):
         return len(settings.LANGUAGES)
 

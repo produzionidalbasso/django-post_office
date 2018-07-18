@@ -314,17 +314,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
         }),
     )
 
-    class Media:
-        js = (
-            #'//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
-            #'//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
-        )
-        css = {
-            'screen': (
-                '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css',
-                'post_office/css/tabs.css',
-            ),
-        }
 
     def render_change_form(self, request, context, **kwargs):
         context = context or {}

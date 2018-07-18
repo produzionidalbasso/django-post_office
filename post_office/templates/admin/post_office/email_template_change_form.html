@@ -1,6 +1,12 @@
 {% extends "admin/change_form.html" %}
 {% load i18n admin_urls static admin_modify %}
 
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" type="text/css" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+  <link rel="stylesheet" type="text/css" href="{% static 'post_office/css/tabs.css' %}">
+{% endblock extrastyle %}
+
 {% block inline_field_sets %}
   {% for inline_admin_formset in inline_admin_formsets %}
     {# if translated_templates customize elsewhere use the template rendered by the formset (as django does) #}

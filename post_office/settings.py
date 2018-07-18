@@ -101,5 +101,6 @@ STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
 POSTOFFICE_TEMPLATES_DEFAULT = (
     ('post_office/base_mail.html','Base Mail'),
 )
+
 def get_base_email_templates():
     return get_config().get('BASE_EMAIL_TEMPLATES', POSTOFFICE_TEMPLATES_DEFAULT)

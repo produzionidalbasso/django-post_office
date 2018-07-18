@@ -162,7 +162,49 @@ class EmailTemplateInlineFormset(BaseInlineFormSet):
             kwargs.update({'initial':initial})
         return super(EmailTemplateInlineFormset,self).__init__(*args, **kwargs)
 
-class EmailTemplateInline(admin.StackedInline):
+class EmailTemplateAdminMixin(object):
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Hook for specifying custom readonly fields.
+        """
+        _readonly_fields = super(EmailTemplateAdminMixin,self).get_readonly_fields(request, obj=obj)
+        return list(_readonly_fields) + ['display_html_mail_preview',
+                                         'display_plain_mail_preview',]
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == 'subject':
+            kwargs.update({'widget': SubjectField})
+        return super(EmailTemplateAdminMixin,self).formfield_for_dbfield(db_field, request, **kwargs)
+
+    def display_html_mail_preview(self,obj=None):
+        content_preview = render_to_template_email(obj.html_content.replace('{{', '{').replace('}}', '}'), {},
+                                                   is_plain_text=False)
+        return mark_safe(strip_spaces_between_tags(mark_safe("""
+            <div >
+                <iframe width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe>
+                <div class='help' style='margin-left:0;padding-left:0'>{help_text}</div>
+            </div>
+            """.format(**{'help_text': _('*The field in brackets are variables!'),
+                         'mail_message': escape(strip_spaces_between_tags(content_preview))})
+        )))
+    display_html_mail_preview.short_description=_("Preview HTML")
+
+    def display_plain_mail_preview(self,obj=None):
+        content_preview = render_to_template_email(obj.html_content.replace('{{', '{').replace('}}', '}'), {},
+                                                   is_plain_text=True)
+        return mark_safe(strip_spaces_between_tags(mark_safe("""
+                    <div style='width: 100%;'>
+                        <iframe width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe>
+                        <div class='help' style='margin-left:0;padding-left:0'>{help_text}</div>
+                    </div>
+                    """.format(**{'help_text': _('*The field in brackets are variables!'),
+                                  'mail_message': escape(strip_spaces_between_tags(content_preview))})
+                                                             )))
+    display_plain_mail_preview.short_description=_("Preview Plain")
+
+class EmailTemplateInline(EmailTemplateAdminMixin,
+                          admin.StackedInline):
     form = EmailTemplateAdminForm
     formset = EmailTemplateInlineFormset
     model = EmailTemplate
@@ -170,10 +212,6 @@ class EmailTemplateInline(admin.StackedInline):
     fields = ('language', 'template_path',
               'subject', 'content_data',
               'display_html_mail_preview', )#''content', 'html_content',)
-    formfield_overrides = {
-        models.CharField: {'widget': SubjectField}
-    }
-    readonly_fields=('display_html_mail_preview',)
     fk_name = 'default_template'
 
     def get_extra(self, request, obj=None, **kwargs):
@@ -183,29 +221,15 @@ class EmailTemplateInline(admin.StackedInline):
         else:
             return len(settings.LANGUAGES)
 
-
     def get_max_num(self, request, obj=None, **kwargs):
         return len(settings.LANGUAGES)
 
-    def display_html_mail_preview(self,obj=None):
-        print("obj : {0}".format(obj))
-        content_preview = obj.html_content or (obj.default_template and obj.default_template.html_content) or ""
-        content_preview = content_preview.replace('{{', '{').replace('}}', '}')
-        context = {}
-        content_preview = render_to_template_email(content_preview, context)
-        context.update({'content': content_preview})
-        help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
-        return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
-                                    ".format(**{'help_text': help_text,
-                                                'mail_message': escape(strip_spaces_between_tags(content_preview))})))
-    display_html_mail_preview.allow_tags=True
-    display_html_mail_preview.short_description=_("Preview HTML")
 
-class EmailTemplateAdmin(admin.ModelAdmin):
+class EmailTemplateAdmin(EmailTemplateAdminMixin,
+                         admin.ModelAdmin):
     form = EmailTemplateAdminForm
     list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
-    readonly_fields = ('display_plain_mail_preview', 'display_html_mail_preview',)
     if settings.USE_I18N:
         inlines = (EmailTemplateInline, AttachmentTemplateInline)
     else:
@@ -229,9 +253,6 @@ class EmailTemplateAdmin(admin.ModelAdmin):
                  'display_html_mail_preview'),
             )}),
     )
-    formfield_overrides = {
-        models.CharField: {'widget': SubjectField}
-    }
 
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
@@ -258,31 +279,6 @@ class EmailTemplateAdmin(admin.ModelAdmin):
         if 'name' in form.changed_data:
             obj.translated_templates.update(name=obj.name)
 
-    def display_html_mail_preview(self,obj=None):
-        content_preview = obj.html_content
-        content_preview = content_preview.replace('{{', '{').replace('}}', '}')
-        context = {}
-        content_preview = render_to_template_email(content_preview, context)
-        context.update({'content': content_preview})
-        help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
-        return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
-                                    ".format(**{'help_text': help_text,
-                                                'mail_message': escape(strip_spaces_between_tags(content_preview))})))
-    display_html_mail_preview.allow_tags=True
-    display_html_mail_preview.short_description=_("Preview HTML")
-
-    def display_plain_mail_preview(self,obj=None):
-        content_preview = obj.content.replace('{{', '{').replace('}}', '}')
-        context = {}
-        content_preview = render_to_template_email(content_preview, context, is_plain_text=True)
-        context.update({'content': content_preview})
-        help_text = '<div class="help">%s</div>' % (_('*Preview data are example data!'))
-        return strip_spaces_between_tags(mark_safe("{help_text}<div style='width:860px; height:500px;'><iframe style='margin-left:107px;' width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
-                                            ".format(**{'help_text': help_text,
-                                                        'mail_message': escape(
-                                                            strip_spaces_between_tags(content_preview))})))
-    display_plain_mail_preview.allow_tags=True
-    display_plain_mail_preview.short_description=_("Preview Plain")
 
 
 class AttachmentAdmin(admin.ModelAdmin):
@@ -290,41 +286,6 @@ class AttachmentAdmin(admin.ModelAdmin):
 
 
 
-'''
-class TabbedDjangoJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Reuses Django's internal jquery version.
-    """
-    class Media:
-        js = (
-            'modeltranslation/js/force_jquery.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'all': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-
-class TabbedExternalJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Loads recent jquery version from a cdn.
-    """
-    class Media:
-        js = (
-            '//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'screen': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-'''
 
 
 admin.site.register(Email, EmailAdmin)

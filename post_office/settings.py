@@ -95,17 +95,22 @@ CONTEXT_FIELD_CLASS = get_config().get('CONTEXT_FIELD_CLASS',
                                        'jsonfield.JSONField')
 context_field_class = import_attribute(CONTEXT_FIELD_CLASS)
 
-
-POSTOFFICE_TEMPLATE_LIBS_TO_LOAD_DEFAULT = '<p>{% load i18n %}{% load static from staticfiles %}</p>'
-POSTOFFICE_TEMPLATE_LIBS_TO_LOAD = getattr(settings,
-                                           'POSTOFFICE_TEMPLATE_LIBS_TO_LOAD',
-                                           POSTOFFICE_TEMPLATE_LIBS_TO_LOAD_DEFAULT)
+PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
+STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
 
 POSTOFFICE_TEMPLATES_DEFAULT = (
     ('post_office/base_mail.html','Base Mail'),
 )
-POSTOFFICE_TEMPLATES = getattr(settings,'POSTOFFICE_TEMPLATES',
-                               POSTOFFICE_TEMPLATES_DEFAULT)
 
-PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
-STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
+POSTOFFICE_WYSIWYG_EDITORS_DEFAULT = [
+    ('redactor.widgets','RedactorEditor',{}),
+    ('ckeditor.widgets','CKEditorWidget',{}),
+    ('tinymce.widgets' ,'TinyMCE',{}),
+]
+
+
+def get_base_email_templates():
+    return get_config().get('BASE_EMAIL_TEMPLATES', POSTOFFICE_TEMPLATES_DEFAULT)
+
+def get_wysiwyg_editors():
+    return get_config().get('WYSIWYG_EDITORS', POSTOFFICE_WYSIWYG_EDITORS_DEFAULT)

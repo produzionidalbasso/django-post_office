@@ -20,7 +20,7 @@ from post_office.utils import transform_html_to_plain, make_raw_template
 
 from .compat import text_type, smart_text
 from .connections import connections
-from .settings import context_field_class, get_log_level, POSTOFFICE_TEMPLATES, PRIORITY, STATUS
+from .settings import context_field_class, get_log_level, get_base_email_templates, PRIORITY, STATUS
 from .validators import validate_email_with_name, validate_template_syntax
 
 logger = logging.getLogger(__name__)
@@ -209,7 +209,7 @@ class EmailTemplate(models.Model):
     """
     Model to hold template information from db
     """
-    TEMPLATE_CHOICES = POSTOFFICE_TEMPLATES
+    TEMPLATE_CHOICES = get_base_email_templates()
 
     label = models.CharField(_("Label"), max_length=255, blank=True)
     name = models.CharField(_('Name'),max_length=255, help_text=_("e.g: 'welcome_email'"))
@@ -273,6 +273,8 @@ class EmailTemplate(models.Model):
                 self.name = self.default_template.name
             if not self.template_path:
                 self.template_path = self.default_template.template_path
+        if not self.template_path:
+            self.template_path =  self.TEMPLATE_CHOICES[0][0]
         self.update_mail_content()
         obj = super(EmailTemplate, self).save(*args, **kwargs)
         cache.delete(self.name)

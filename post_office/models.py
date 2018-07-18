@@ -209,7 +209,7 @@ class EmailTemplate(models.Model):
     """
     Model to hold template information from db
     """
-    TEMPLATE_CHOICES = get_base_email_templates()
+    TEMPLATE_CHOICES = [(x, _(y)) for x, y in get_base_email_templates()]
 
     label = models.CharField(_("Label"), max_length=255, blank=True)
     name = models.CharField(_('Name'),max_length=255, help_text=_("e.g: 'welcome_email'"))

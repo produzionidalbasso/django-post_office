@@ -107,6 +107,7 @@ def get_base_email_templates():
 def get_wysiwyg_editors():
     POSTOFFICE_WYSIWYG_EDITORS_DEFAULT = [
         ('ckeditor.widgets', 'CKEditorWidget', {}),
-        ('tinymce.widgets', 'TinyMCE', {}),
+        ('tinymce.widgets', 'TinyMCE', {'attrs': {'cols': 120, 'rows': 30}}),
+
     ]
     return get_config().get('WYSIWYG_EDITORS', POSTOFFICE_WYSIWYG_EDITORS_DEFAULT)

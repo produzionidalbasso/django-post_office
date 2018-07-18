@@ -203,8 +203,10 @@ class EmailTemplateAdminMixin(object):
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'subject':
-            kwargs.update({'widget': SubjectField})
+            kwargs.update({'widget': SubjectField,
+                           'required': True})
         elif db_field.name == 'content_data':
+            kwargs.update({'required': True,})
             _editor_found=False
             for _editor in postoffice_settings.get_wysiwyg_editors():
                 try:
@@ -268,7 +270,7 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
 
     fieldsets = ((None, {
         'fields': (
-            ('language', 'template_path','subject', ),
+            ('language', 'template_path','subject',),
             ('content_data',),
             ('display_html_mail_preview',),
         ),
@@ -304,8 +306,7 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
             )}),
         (None, {
             'fields': (
-                ('template_path',),
-                ('subject',),
+                ('template_path','subject',),
                 ('content_data',),
                 ('display_html_mail_preview'),
             ),
@@ -315,8 +316,8 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
 
     class Media:
         js = (
-            '//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
+            #'//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
+            #'//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
         )
         css = {
             'screen': (
@@ -336,10 +337,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'template_path':
             kwargs.update({'initial':EmailTemplate.TEMPLATE_CHOICES[0][0]})
-        elif db_field.name == 'subject':
-            kwargs.update({'required':True})
-        elif db_field.name == 'content_data':
-            kwargs.update({'required':True})
         return super(EmailTemplateAdmin,self).formfield_for_dbfield(db_field, request, **kwargs)
 
     def get_queryset(self, request):

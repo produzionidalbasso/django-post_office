@@ -1,0 +1,80 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block inline_field_sets %}
+  {% for inline_admin_formset in inline_admin_formsets %}
+    {# if translated_templates customize elsewhere use the template rendered by the formset (as django does) #}
+    {% if inline_admin_formset.formset.prefix == 'translated_templates' %}
+
+      <div class="js-inline-admin-formset inline-group"
+           id="{{ inline_admin_formset.formset.prefix }}-group"
+           data-inline-type="stacked"
+           data-inline-formset="{{ inline_admin_formset.inline_formset_data }}">
+        <fieldset class="module {{ inline_admin_formset.classes }}">
+          <h2>{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}</h2>
+          {{ inline_admin_formset.formset.management_form }}
+          {{ inline_admin_formset.formset.non_form_errors }}
+
+          <div id="tabs">
+            <ul>
+              <li class="{% if adminform.form.fields.template_path.field.errors or adminform.form.fields.subject.field.errors or adminform.form.content_data.errors %}ui-state-error{% else %}ui-tabs-active{% endif %}">
+                <a href="#tabs-default">{{ DEFAULT_LANGUAGE|upper }} (Default)</a>
+              </li>
+              {% for inline_admin_form in inline_admin_formset %}
+              {% if not forloop.last %}
+                <li class="{% if inline_admin_form.form.errors %}ui-state-error{% endif %}">
+                  <a href="#tabs-{{forloop.counter0}}"> {{ inline_admin_form.form.language.value|upper }}</a>
+                </li>
+              {% endif %}
+              {% endfor %}
+            </ul>
+
+            <div id="tabs-default"></div>
+            {% for inline_admin_form in inline_admin_formset %}
+              <div id="tabs-{{forloop.counter0}}">
+                <div class="inline-related{% if inline_admin_form.original or inline_admin_form.show_url %} has_original{% endif %}{% if forloop.last %} empty-form last-related{% endif %}" id="{{ inline_admin_formset.formset.prefix }}-{% if not forloop.last %}{{ forloop.counter0 }}{% else %}empty{% endif %}">
+                {% if inline_admin_form.form.non_field_errors %}{{ inline_admin_form.form.non_field_errors }}{% endif %}
+                {% for fieldset in inline_admin_form %}
+                  {% include "admin/includes/fieldset.html" %}
+                {% endfor %}
+                {% if inline_admin_form.needs_explicit_pk_field %}{{ inline_admin_form.pk_field.field }}{% endif %}
+                {{ inline_admin_form.fk_field.field }}
+                {% if inline_admin_formset.formset.can_delete and inline_admin_form.original %}
+                  <span class="delete">{{ inline_admin_form.deletion_field.field }} {{ inline_admin_form.deletion_field.label_tag }}</span>
+                {% endif %}
+                {% if inline_admin_form.show_url %}
+                  <a href="{{ inline_admin_form.absolute_url }}">{% trans "View on site" %}</a>
+                {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+    {% else %}
+      {# block.super #}
+      {% include inline_admin_formset.opts.template %}
+    {% endif %}
+  {% endfor %}
+{% endblock %}
+
+{% block admin_change_form_document_ready %}
+  {{ block.super }}
+  {% if USE_I18N %}
+    <script type="text/javascript">
+      $(function() {
+        // Move Fieldset of Default email data to the tab #tabs-default
+        $( "#tabs-default" ).append($( ".js-move-to-tabs-default" ));
+        // Start Jquery UI-Tabs
+        $( "#tabs" ).tabs();
+        {% comment %}
+        var err_list = $('.errorlist');
+        if(err_list.length>0){
+          $("#tabs").tabs('select',$(err_list[0]).closest('.ui-tabs-panel').attr('id'));
+          $.scrollTo(err_list[0], 800);
+        }
+        {% endcomment %}
+      });
+    </script>
+  {% endif %}
+{% endblock %}

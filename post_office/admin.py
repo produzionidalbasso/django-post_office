@@ -3,10 +3,11 @@ from __future__ import unicode_literals
 import logging
 import warnings
 
+
 from django import forms
 from django.contrib import admin
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.forms import BaseInlineFormSet, widgets
 from django.forms.widgets import TextInput
 from django.template.defaultfilters import safe
@@ -39,6 +40,7 @@ class AttachmentInline(admin.TabularInline):
         return '---'
     display_attachment.allow_tags= True
 
+
 class AttachmentTemplateInline(admin.TabularInline):
     model=AttachmentTemplate.email_templates.through
     readonly_fields = ('display_attachment',)
@@ -66,8 +68,6 @@ class CommaSeparatedEmailWidget(TextInput):
         if isinstance(value, six.string_types):
             value = [value, ]
         return ','.join([item for item in value])
-
-
 
 
 
@@ -127,6 +127,7 @@ class EmailAdmin(admin.ModelAdmin):
                                              rows_updated) % {'count': rows_updated})
     set_as_sent.short_description = _('Set as sent selected emails')
 
+
 class LogAdmin(admin.ModelAdmin):
     list_display = ('date', 'email', 'status', 'get_message_preview')
 
@@ -141,29 +142,52 @@ class SubjectField(TextInput):
         super(SubjectField, self).__init__(*args, **kwargs)
         self.attrs.update({'style': 'width: 610px;'})
 
+
 class EmailTemplateAdminForm(forms.ModelForm):
 
     language = forms.ChoiceField(choices=settings.LANGUAGES, required=False,
                                  widget=widgets.HiddenInput,
                                  help_text=_("Render template in alternative language"),
-                                 label=_("Language"))
+                                 label=_("Language"),)
 
     class Meta:
         model = EmailTemplate
         exclude=()
-        #fields = ('name', 'description', 'subject',
-        #          'content', 'html_content', 'language', 'default_template')
+
 
 class EmailTemplateInlineFormset(BaseInlineFormSet):
+
     def __init__(self, *args, **kwargs):
         if settings.USE_I18N:
             initial = kwargs.get('initial',[])
             languages = dict(settings.LANGUAGES).keys()
-            for ix,language in enumerate(languages):
-                try:
-                    initial[ix].update({'language':language})
-                except IndexError:
-                    initial.append({'language': language})
+            instance = kwargs.get('instance', None)
+            if not instance:
+                # If there isn't the instance, I add all project languages
+                for ix,language in enumerate(languages):
+                    if language != settings.LANGUAGE_CODE:
+                        try:
+                            initial[ix].update({'language':language})
+                        except IndexError:
+                            initial.append({'language': language})
+            else:
+                # if there is the instance, I add only languages that miss in the translated_templated
+                for ix,language in enumerate(languages):
+                    # boolean variable that is used to find languages to add in 'initial'
+                    lang_finded = False
+                    # iteration on translated_templates
+                    for translated_template in instance.translated_templates.all():
+                        if translated_template.language == language:
+                            # translated_template finded --> language not to be included in initial
+                            lang_finded = True
+                            break
+                    # I add language only if it isn't in translated_templates
+                    if not lang_finded:
+                        if language != settings.LANGUAGE_CODE:
+                            try:
+                                initial[ix].update({'language':language})
+                            except IndexError:
+                                initial.append({'language': language})
             kwargs.update({'initial':initial})
         return super(EmailTemplateInlineFormset,self).__init__(*args, **kwargs)
 
@@ -211,7 +235,7 @@ class EmailTemplateAdminMixin(object):
         content_preview = render_to_template_email(obj.html_content.replace('{{', '{').replace('}}', '}'), {},
                                                    is_plain_text=False)
         return mark_safe(strip_spaces_between_tags(mark_safe("""
-            <div >
+            <div>
                 <iframe width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe>
                 <div class='help' style='margin-left:0;padding-left:0'>{help_text}</div>
             </div>
@@ -224,12 +248,12 @@ class EmailTemplateAdminMixin(object):
         content_preview = render_to_template_email(obj.html_content.replace('{{', '{').replace('}}', '}'), {},
                                                    is_plain_text=True)
         return mark_safe(strip_spaces_between_tags(mark_safe("""
-                    <div style='width: 100%;'>
-                        <iframe width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe>
-                        <div class='help' style='margin-left:0;padding-left:0'>{help_text}</div>
-                    </div>
-                    """.format(**{'help_text': _('*The field in brackets are variables!'),
-                                  'mail_message': escape(strip_spaces_between_tags(content_preview))})
+                <div style='width: 100%;'>
+                    <iframe width='97%' height='480px' srcdoc='{mail_message}'>PREVIEW</iframe>
+                    <div class='help' style='margin-left:0;padding-left:0'>{help_text}</div>
+                </div>
+                """.format(**{'help_text': _('*The field in brackets are variables!'),
+                              'mail_message': escape(strip_spaces_between_tags(content_preview))})
                                                              )))
     display_plain_mail_preview.short_description=_("Preview Plain")
 
@@ -238,6 +262,7 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
     form = EmailTemplateAdminForm
     formset = EmailTemplateInlineFormset
     model = EmailTemplate
+    verbose_name_plural = _("Email Contents")
     #extra = 0
     fk_name = 'default_template'
 
@@ -253,16 +278,16 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
     def get_extra(self, request, obj=None, **kwargs):
         """Hook for customizing the number of extra inline forms."""
         if obj:
-            return len(settings.LANGUAGES) - obj.translated_templates.count()
+            return len(settings.LANGUAGES) - 1 - obj.translated_templates.count()
         else:
-            return len(settings.LANGUAGES)
+            return len(settings.LANGUAGES) - 1
 
     def get_max_num(self, request, obj=None, **kwargs):
-        return len(settings.LANGUAGES)
-
+        return len(settings.LANGUAGES) - 1
 
 class EmailTemplateAdmin(EmailTemplateAdminMixin,
                          admin.ModelAdmin):
+    change_form_template = 'admin/post_office/email_template_change_form.html'
     form = EmailTemplateAdminForm
     list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
@@ -277,18 +302,44 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
                 ('name',),
                 ('label', 'description'),
             )}),
-        (_("Default Content"), {
+        (None, {
             'fields': (
                 ('template_path',),
                 ('subject',),
                 ('content_data',),
-                ('display_html_mail_preview',),
-            )}),
+                ('display_html_mail_preview'),
+            ),
+            'classes':['js-move-to-tabs-default']
+        }),
     )
+
+    class Media:
+        js = (
+            '//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
+            '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
+        )
+        css = {
+            'screen': (
+                '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css',
+                'post_office/css/tabs.css',
+            ),
+        }
+
+    def render_change_form(self, request, context, **kwargs):
+        context = context or {}
+        context.update({
+            "DEFAULT_LANGUAGE": settings.LANGUAGE_CODE,
+            "USE_I18N": settings.USE_I18N
+        })
+        return super(EmailTemplateAdmin,self).render_change_form(request, context, **kwargs)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'template_path':
             kwargs.update({'initial':EmailTemplate.TEMPLATE_CHOICES[0][0]})
+        elif db_field.name == 'subject':
+            kwargs.update({'required':True})
+        elif db_field.name == 'content_data':
+            kwargs.update({'required':True})
         return super(EmailTemplateAdmin,self).formfield_for_dbfield(db_field, request, **kwargs)
 
     def get_queryset(self, request):
@@ -311,11 +362,8 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
             obj.translated_templates.update(name=obj.name)
 
 
-
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'file', )
-
-
 
 
 

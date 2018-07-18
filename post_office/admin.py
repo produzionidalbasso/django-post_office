@@ -239,7 +239,6 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
     formset = EmailTemplateInlineFormset
     model = EmailTemplate
     #extra = 0
-
     fk_name = 'default_template'
 
     fieldsets = ((None, {
@@ -262,8 +261,8 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
         return len(settings.LANGUAGES)
 
 
-
-class EmailTemplateAdmin(EmailTemplateAdminMixin, admin.ModelAdmin):
+class EmailTemplateAdmin(EmailTemplateAdminMixin,
+                         admin.ModelAdmin):
     form = EmailTemplateAdminForm
     list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
@@ -286,10 +285,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin, admin.ModelAdmin):
                 ('display_html_mail_preview',),
             )}),
     )
-    #formfield_overrides = {
-    #    models.CharField: {'widget': SubjectField}
-    #}
-
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'template_path':
@@ -322,41 +317,6 @@ class AttachmentAdmin(admin.ModelAdmin):
 
 
 
-'''
-class TabbedDjangoJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Reuses Django's internal jquery version.
-    """
-    class Media:
-        js = (
-            'modeltranslation/js/force_jquery.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'all': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-
-class TabbedExternalJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Loads recent jquery version from a cdn.
-    """
-    class Media:
-        js = (
-            '//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'screen': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-'''
 
 
 admin.site.register(Email, EmailAdmin)

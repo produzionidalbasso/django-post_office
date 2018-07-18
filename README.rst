@@ -283,6 +283,29 @@ For example, if you put "Hello, {{ name }}" in the subject line and pass in
     content = 'Hi <strong>alice</strong>, how are you feeling today?'
 
 
+Email Template Refactoring (version>4)
+------------------------
+
+From the version 4.0 EmailTemplate has been refactored.
+Now the template uses the `template_path` that is the path of your base template.html file that your EmailTemplate will extend only the content, using new context_variables and parent stucture, styles and template_tags
+By default EmailTemplate will override from `post_office/base_mail.html`
+You can define so your own email base templates html overriding settings:
+
+.. code-block:: python
+
+    # Put this in settings.py
+    POST_OFFICE = {
+        'BASE_EMAIL_TEMPLATES': ``[
+            ('my_email_dir/base_mail.html','Base Mail'),
+            ('my_email_dir/advanded_mail.html','Advanced Mail'),
+        ]``
+    }
+
+``BASE_EMAIL_TEMPLATES`` defaults to ``[
+    ('post_office/base_mail.html','Base Mail'),
+]``.
+
+
 Multilingual Email Templates
 ----------------------------
 
@@ -319,6 +342,7 @@ also similarly easy:
         template=template,
         language='id', # Sends using Indonesian template
     )
+
 
 Custom Email Backends
 ---------------------
@@ -629,7 +653,6 @@ Version 4.0.0
 
 * Introduced the possibility to override email html templates. Thanks @madEng84!
 * Added the preview of email and email templates via IFrame. Thanks @madEng84!
-* Added JQueryUi tabs to better visualize localized EmailTemplates. Thanks @nciccarone!
 
 .. note:: This is a reStructuredText directive - the Markdown
    output should be just periods

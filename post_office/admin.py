@@ -43,9 +43,10 @@ class AttachmentInline(admin.TabularInline):
 
 class AttachmentTemplateInline(admin.TabularInline):
     model=AttachmentTemplate.email_templates.through
-    readonly_fields = ('display_attachment',)
-    fields = ('display_attachment',)
+    fields = ('attachmenttemplate',)
     extra=0
+    verbose_name = _("Email Attachment")
+    verbose_name_plural = _("Email Attachments")
 
     def display_attachment(self,obj):
         if obj and obj.file:
@@ -349,7 +350,11 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
 
 
 class AttachmentAdmin(admin.ModelAdmin):
-    list_display = ('name', 'file', )
+    list_display = ('name', 'file', 'mimetype')
+
+class AttachmentTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'file', 'mimetype')
+    fields = ('name', 'file', 'mimetype')
 
 
 
@@ -357,3 +362,4 @@ admin.site.register(Email, EmailAdmin)
 admin.site.register(Log, LogAdmin)
 admin.site.register(EmailTemplate, EmailTemplateAdmin)
 admin.site.register(Attachment, AttachmentAdmin)
+admin.site.register(AttachmentTemplate, AttachmentTemplateAdmin)

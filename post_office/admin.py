@@ -13,7 +13,6 @@ from django.utils.safestring import mark_safe
 from django.utils.text import Truncator
 from django.utils.translation import ugettext, ugettext_lazy as _, ungettext
 
-from . import settings as postoffice_settings
 from .fields import CommaSeparatedEmailField
 from .models import Attachment, Log, Email, EmailTemplate, STATUS, AttachmentTemplate
 from .utils import render_to_template_email
@@ -33,6 +32,7 @@ class AttachmentInline(admin.TabularInline):
             return '<a href="{obj.file.url}" target="_blank">{obj.name}</a>'.format(obj=obj)
         return '---'
     display_attachment.allow_tags= True
+
 
 class AttachmentTemplateInline(admin.TabularInline):
     model=AttachmentTemplate.email_templates.through
@@ -61,8 +61,6 @@ class CommaSeparatedEmailWidget(TextInput):
         if isinstance(value, six.string_types):
             value = [value, ]
         return ','.join([item for item in value])
-
-
 
 
 
@@ -122,6 +120,7 @@ class EmailAdmin(admin.ModelAdmin):
                                              rows_updated) % {'count': rows_updated})
     set_as_sent.short_description = _('Set as sent selected emails')
 
+
 class LogAdmin(admin.ModelAdmin):
     list_display = ('date', 'email', 'status', 'get_message_preview')
 
@@ -136,12 +135,13 @@ class SubjectField(TextInput):
         super(SubjectField, self).__init__(*args, **kwargs)
         self.attrs.update({'style': 'width: 610px;'})
 
+
 class EmailTemplateAdminForm(forms.ModelForm):
 
     language = forms.ChoiceField(choices=settings.LANGUAGES, required=False,
                                  widget=widgets.HiddenInput,
                                  help_text=_("Render template in alternative language"),
-                                 label=_("Language"))
+                                 label=_("Language"),)
 
     class Meta:
         model = EmailTemplate
@@ -149,20 +149,45 @@ class EmailTemplateAdminForm(forms.ModelForm):
         #fields = ('name', 'description', 'subject',
         #          'content', 'html_content', 'language', 'default_template')
 
+
 class EmailTemplateInlineFormset(BaseInlineFormSet):
+
     def __init__(self, *args, **kwargs):
         if settings.USE_I18N:
             initial = kwargs.get('initial',[])
             languages = dict(settings.LANGUAGES).keys()
-            for ix,language in enumerate(languages):
-                try:
-                    initial[ix].update({'language':language})
-                except IndexError:
-                    initial.append({'language': language})
+            instance = kwargs.get('instance', None)
+            if not instance:
+                # If there isn't the instance, I add all project languages
+                for ix,language in enumerate(languages):
+                    try:
+                        initial[ix].update({'language':language})
+                    except IndexError:
+                        initial.append({'language': language})
+            else:
+                # if there is the instance, I add only languages that miss in the translated_templated
+                for ix,language in enumerate(languages):
+                    # boolean variable that is used to find languages to add in 'initial'
+                    lang_finded = False
+                    # iteration on translated_templates
+                    for translated_template in instance.translated_templates.all():
+                        if translated_template.language == language:
+                            # translated_template finded --> language not to be included in initial
+                            lang_finded = True
+                            break
+                    # I add language only if it isn't in translated_templates
+                    if not lang_finded:
+                        try:
+                            initial[ix].update({'language':language})
+                        except IndexError:
+                            initial.append({'language': language})
             kwargs.update({'initial':initial})
+
         return super(EmailTemplateInlineFormset,self).__init__(*args, **kwargs)
 
+
 class EmailTemplateInline(admin.StackedInline):
+    template = 'admin/email_template_stacked.html'
     form = EmailTemplateAdminForm
     formset = EmailTemplateInlineFormset
     model = EmailTemplate
@@ -188,7 +213,6 @@ class EmailTemplateInline(admin.StackedInline):
         return len(settings.LANGUAGES)
 
     def display_html_mail_preview(self,obj=None):
-        print("obj : {0}".format(obj))
         content_preview = obj.html_content or (obj.default_template and obj.default_template.html_content) or ""
         content_preview = content_preview.replace('{{', '{').replace('}}', '}')
         context = {}
@@ -201,7 +225,11 @@ class EmailTemplateInline(admin.StackedInline):
     display_html_mail_preview.allow_tags=True
     display_html_mail_preview.short_description=_("Preview HTML")
 
+
+
+
 class EmailTemplateAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/email_template_change_form.html'
     form = EmailTemplateAdminForm
     list_display = ('label', 'name', 'template_path','description_shortened', 'subject', 'languages_compact', 'created')
     search_fields = ('label', 'name', 'description', 'subject')
@@ -284,47 +312,20 @@ class EmailTemplateAdmin(admin.ModelAdmin):
     display_plain_mail_preview.allow_tags=True
     display_plain_mail_preview.short_description=_("Preview Plain")
 
+    class Media:
+        js = (
+            '//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
+            '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
+        )
+        css = {
+            'screen': (
+                '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css',
+                'post_office/css/tabs.css',
+            ),
+        }
 
 class AttachmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'file', )
-
-
-
-'''
-class TabbedDjangoJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Reuses Django's internal jquery version.
-    """
-    class Media:
-        js = (
-            'modeltranslation/js/force_jquery.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'all': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-
-class TabbedExternalJqueryTranslationAdmin(TranslationAdmin):
-    """
-    Convenience class which includes the necessary media files for tabbed
-    translation fields. Loads recent jquery version from a cdn.
-    """
-    class Media:
-        js = (
-            '//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js',
-            '//cdn.jsdelivr.net/jquery.mb.browser/0.1/jquery.mb.browser.min.js',
-            'modeltranslation/js/tabbed_translation_fields.js',
-        )
-        css = {
-            'screen': ('modeltranslation/css/tabbed_translation_fields.css',),
-        }
-
-'''
 
 
 admin.site.register(Email, EmailAdmin)

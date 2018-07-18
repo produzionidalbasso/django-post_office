@@ -98,9 +98,16 @@ context_field_class = import_attribute(CONTEXT_FIELD_CLASS)
 PRIORITY = namedtuple('PRIORITY', 'low medium high now')._make(range(4))
 STATUS = namedtuple('STATUS', 'sent failed queued')._make(range(3))
 
-POSTOFFICE_TEMPLATES_DEFAULT = (
-    ('post_office/base_mail.html','Base Mail'),
-)
-
 def get_base_email_templates():
+    POSTOFFICE_TEMPLATES_DEFAULT = (
+        ('post_office/base_mail.html', 'Base Mail'),
+    )
     return get_config().get('BASE_EMAIL_TEMPLATES', POSTOFFICE_TEMPLATES_DEFAULT)
+
+def get_wysiwyg_editors():
+    POSTOFFICE_WYSIWYG_EDITORS_DEFAULT = [
+        ('ckeditor.widgets', 'CKEditorWidget', {}),
+        ('tinymce.widgets', 'TinyMCE', {'attrs': {'cols': 120, 'rows': 30}}),
+
+    ]
+    return get_config().get('WYSIWYG_EDITORS', POSTOFFICE_WYSIWYG_EDITORS_DEFAULT)

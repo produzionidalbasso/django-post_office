@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+import logging
+import warnings
 
-from django.core.exceptions import ValidationError
 
 from django import forms
-from django.db import models
 from django.contrib import admin
 from django.conf import settings
+from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.forms import BaseInlineFormSet, widgets
 from django.forms.widgets import TextInput
 from django.template.defaultfilters import safe
@@ -16,9 +17,12 @@ from django.utils.safestring import mark_safe
 from django.utils.text import Truncator
 from django.utils.translation import ugettext, ugettext_lazy as _, ungettext
 
+from . import settings as postoffice_settings
 from .fields import CommaSeparatedEmailField
 from .models import Attachment, Log, Email, EmailTemplate, STATUS, AttachmentTemplate
 from .utils import render_to_template_email
+
+logger = logging.getLogger(__name__)
 
 class LogInline(admin.StackedInline):
     model = Log
@@ -199,7 +203,34 @@ class EmailTemplateAdminMixin(object):
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'subject':
-            kwargs.update({'widget': SubjectField})
+            kwargs.update({'widget': SubjectField,
+                           'required': True})
+        elif db_field.name == 'content_data':
+            kwargs.update({'required': True,})
+            _editor_found=False
+            for _editor in postoffice_settings.get_wysiwyg_editors():
+                try:
+                    _module_name = _editor[0]
+                    _widget = _editor[1]
+                    _widget_attrs = _editor[2]
+                    WysiwygEditor = getattr(__import__(_module_name, {}, {}, [_widget]), _widget)
+                    kwargs.update({
+                        'widget': WysiwygEditor(**_widget_attrs)
+                    })
+                    editor_found = True
+                    break
+                except ImportError:
+                    logger.exception("Error Importing WYSIWYG Editor")
+                except IndexError:
+                    raise ImproperlyConfigured("POST_OFFICE.WYSIWYG_EDITORS setting entries are not in form of (<module>,<Editor>) ")
+            if not _editor_found:
+                warnings.warn("Cannot use any editor between {0} because they are not installed. "
+                              "Have you installed and configured one of them properly?"
+                              "Either you can configure POSTOFFICE_WYSIWYG_EDITORS to use your own editor"
+                              "".format([_editor[1]
+                                         for _editor
+                                         in postoffice_settings.get_wysiwyg_editors()]),
+                              ImportWarning)
         return super(EmailTemplateAdminMixin,self).formfield_for_dbfield(db_field, request, **kwargs)
 
     def display_html_mail_preview(self,obj=None):
@@ -235,10 +266,16 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
     model = EmailTemplate
     verbose_name_plural = _("Email Contents")
     #extra = 0
-    fields = ('language', 'template_path',
-              'subject', 'content_data',
-              'display_html_mail_preview', )#''content', 'html_content',)
     fk_name = 'default_template'
+
+    fieldsets = ((None, {
+        'fields': (
+            ('language', 'template_path','subject',),
+            ('content_data',),
+            ('display_html_mail_preview',),
+        ),
+    }),)
+
 
     def get_extra(self, request, obj=None, **kwargs):
         """Hook for customizing the number of extra inline forms."""
@@ -269,8 +306,7 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
             )}),
         (None, {
             'fields': (
-                ('template_path',),
-                ('subject',),
+                ('template_path','subject',),
                 ('content_data',),
                 ('display_html_mail_preview'),
             ),
@@ -278,17 +314,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
         }),
     )
 
-    class Media:
-        js = (
-            '//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js',
-            '//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js',
-        )
-        css = {
-            'screen': (
-                '//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css',
-                'post_office/css/tabs.css',
-            ),
-        }
 
     def render_change_form(self, request, context, **kwargs):
         context = context or {}
@@ -301,10 +326,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == 'template_path':
             kwargs.update({'initial':EmailTemplate.TEMPLATE_CHOICES[0][0]})
-        elif db_field.name == 'subject':
-            kwargs.update({'required':True})
-        elif db_field.name == 'content_data':
-            kwargs.update({'required':True})
         return super(EmailTemplateAdmin,self).formfield_for_dbfield(db_field, request, **kwargs)
 
     def get_queryset(self, request):
@@ -325,7 +346,6 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
         # if the name got changed, also change the translated templates to match again
         if 'name' in form.changed_data:
             obj.translated_templates.update(name=obj.name)
-
 
 
 class AttachmentAdmin(admin.ModelAdmin):

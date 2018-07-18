@@ -273,6 +273,8 @@ class EmailTemplate(models.Model):
                 self.name = self.default_template.name
             if not self.template_path:
                 self.template_path = self.default_template.template_path
+        if not self.template_path:
+            self.template_path =  self.TEMPLATE_CHOICES[0][0]
         self.update_mail_content()
         obj = super(EmailTemplate, self).save(*args, **kwargs)
         cache.delete(self.name)

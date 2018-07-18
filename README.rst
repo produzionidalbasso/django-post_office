@@ -22,6 +22,13 @@ Dependencies
 * `django-jsonfield <https://github.com/bradjasper/django-jsonfield>`_
 
 
+Optionals Dependencies
+============
+
+* `django-ckeditor <https://github.com/django-ckeditor/django-ckeditor>`_ ( for EmailTemplates )
+* `django-tinymce <https://github.com/aljosa/django-tinymce>`_ ( for EmailTemplates )
+
+
 Installation
 ============
 
@@ -536,6 +543,32 @@ backends you use. In my tests, multi threading speeds up email backends that use
         'THREADS_PER_PROCESS': 10
     }
 
+Email Template Refactoring (version>4)
+------------------------
+
+... to be written ...
+
+WYSIWYG Editors
+------------------------
+
+By default EmailTemplate's html content can be written using a WYSIWYG Editor (CKEditorWidget and TinyMCE supported).
+If you need to customize your EmailTemplate, you can specify your own WYSIWYG Editor _:
+
+.. code-block:: python
+
+    # Put this in settings.py
+    POST_OFFICE = {
+        'WYSIWYG_EDITORS': ``[
+            ('ckeditor.widgets','CKEditorWidget',{}),
+            ('redactor.widgets','RedactorEditor',{}),
+        ]``
+    }
+
+``WYSIWYG_EDITORS`` defaults to ``[
+    ('ckeditor.widgets','CKEditorWidget',{}),
+    ('tinymce.widgets' ,'TinyMCE',{}),
+]``.
+
 
 Performance
 ===========
@@ -612,12 +645,28 @@ or::
 Changelog
 =========
 
+.. ..
+
+<!---
+
+Version 4.0.0
+
+* Introduced the possibility to override email html templates. Thanks @madEng84!
+* Added the preview of email and email templates via IFrame. Thanks @madEng84!
+
+.. note:: This is a reStructuredText directive - the Markdown
+   output should be just periods
+
+.. --->
+
+
+
 Version 3.0.4
 -------------
 * Added compatibility with Django 2.0. Thanks @PreActionTech and @PetrDlouhy!
 * Added natural key support to `EmailTemplate` model. Thanks @maximlomakin!
 
-Version 3.0.2
+Version 3.0.3
 -------------
 - Fixed memory leak when multiprocessing is used.
 - Fixed a possible error when adding a new email from Django admin. Thanks @ivlevdenis!

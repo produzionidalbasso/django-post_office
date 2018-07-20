@@ -12,7 +12,7 @@ from django.forms import BaseInlineFormSet, widgets
 from django.forms.widgets import TextInput
 from django.template.defaultfilters import safe
 from django.utils import six
-from django.utils.html import strip_spaces_between_tags, escape
+from django.utils.html import strip_spaces_between_tags, escape, strip_tags
 from django.utils.safestring import mark_safe
 from django.utils.text import Truncator
 from django.utils.translation import ugettext, ugettext_lazy as _, ungettext
@@ -39,6 +39,7 @@ class AttachmentInline(admin.TabularInline):
             return '<a href="{obj.file.url}" target="_blank">{obj.name}</a>'.format(obj=obj)
         return '---'
     display_attachment.allow_tags= True
+
 
 
 class AttachmentTemplateInline(admin.TabularInline):
@@ -155,6 +156,12 @@ class EmailTemplateAdminForm(forms.ModelForm):
         model = EmailTemplate
         exclude=()
 
+    def clean_content_data(self):
+        value = self.cleaned_data['content_data']
+        if not strip_tags(value):
+            raise forms.ValidationError(_("Campo Obbligatorio"))
+
+        return value
 
 class EmailTemplateInlineFormset(BaseInlineFormSet):
 
@@ -353,8 +360,12 @@ class AttachmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'file', 'mimetype')
 
 class AttachmentTemplateAdmin(admin.ModelAdmin):
-    list_display = ('name', 'file', 'mimetype')
-    fields = ('name', 'file', 'mimetype')
+    if settings.USE_I18N:
+        list_display = ('name', 'file', 'mimetype', 'language')
+        fields = ('name', 'file', 'mimetype', 'language')
+    else:
+        list_display = ('name', 'file', 'mimetype',)
+        fields = ('name', 'file', 'mimetype',)
 
 
 

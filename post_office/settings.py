@@ -1,11 +1,11 @@
 import warnings
 
+from django.utils.translation import ugettext_lazy as _
 from django.conf import settings
 from django.core.cache.backends.base import InvalidCacheBackendError
 
 from collections import namedtuple
 from .compat import import_attribute, get_cache
-
 
 def get_backend(alias='default'):
     return get_available_backends()[alias]
@@ -111,3 +111,12 @@ def get_wysiwyg_editors():
 
     ]
     return get_config().get('WYSIWYG_EDITORS', POSTOFFICE_WYSIWYG_EDITORS_DEFAULT)
+
+def get_base_languages():
+    POSTOFFICE_LANGUAGES_DEFAULT = (
+        ('', 'All languages'),
+    )
+    if settings.USE_I18N:
+        return POSTOFFICE_LANGUAGES_DEFAULT+getattr(settings, 'LANGUAGES', {})
+    else:
+        return POSTOFFICE_LANGUAGES_DEFAULT

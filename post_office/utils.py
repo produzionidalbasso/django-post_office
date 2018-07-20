@@ -3,7 +3,7 @@ import logging
 
 from django.apps import apps
 from django.conf import settings
-from django.core.exceptions import ValidationError, ImproperlyConfigured
+from django.core.exceptions import ValidationError, ImproperlyConfigured, ObjectDoesNotExist
 from django.core.files import File
 from django.template import Template, Context
 from django.utils.encoding import force_text
@@ -57,8 +57,12 @@ def get_email_template(name, language=''):
         if email_template is not None:
             return email_template
         else:
-            email_template = apps.get_model('post_office.EmailTemplate').objects.get(
-                name=name, language=language)
+            try:
+                email_template = apps.get_model('post_office.EmailTemplate').objects.get(
+                    name=name, language=language)
+            except ObjectDoesNotExist:
+                email_template = apps.get_model('post_office.EmailTemplate').objects.get(
+                    name=name, language='')
             cache.set(composite_name, email_template)
             return email_template
 
@@ -98,7 +102,7 @@ def create_attachments(attachment_files):
             opened_file = open(content, 'rb')
             content = File(opened_file)
 
-        attachment = apps.get_model('post_office.Attachment')
+        attachment = apps.get_model('post_office.Attachment')()
         if mimetype:
             attachment.mimetype = mimetype
         attachment.file.save(filename, content=content, save=True)

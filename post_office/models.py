@@ -16,11 +16,11 @@ from jsonfield import JSONField
 
 from post_office import cache
 from post_office.fields import CommaSeparatedEmailField
-from post_office.utils import transform_html_to_plain, make_raw_template
+from post_office.utils import make_raw_template
 
 from .compat import text_type, smart_text
 from .connections import connections
-from .settings import context_field_class, get_log_level, get_base_email_templates, PRIORITY, STATUS
+from .settings import context_field_class, get_log_level, get_base_email_templates, PRIORITY, STATUS, get_base_languages
 from .validators import validate_email_with_name, validate_template_syntax
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ class Email(models.Model):
         """
         subject = smart_text(self.subject)
 
-        if self.template is not None:# and self.context is not None:
+        if self.template is not None and self.context is not None:
             _context = Context(self.context)
             subject = Template(self.template.subject).render(_context)
             message = Template(self.template.content).render(_context)
@@ -266,6 +266,39 @@ class EmailTemplate(models.Model):
 
     update_mail_content.alters_data = True
 
+    def get_attachments(self):
+        ''' If self is default_template instance, this method returns self.attachement filtered for self.language
+        (or default_language)
+        else if self is a translation_template instance, this method returns his default_template attachments
+        filtered for self.language (or default_language).
+        '''
+
+        attachments = []
+        # In the translation_template we don't have attachements objects, so
+        # IF we are in the default_template we can take self.attachments
+        # ELSE IF we are in the translation_template we must take attachments of his default template
+        if self.attachments.count() > 0:
+            attachments = self.attachments.all()
+        elif self.default_template and self.default_template.attachments.count() > 0:
+            attachments = self.default_template.attachments.all()
+
+        # Filter attachments by language
+        return_attachments = []
+        for attachment in attachments:
+            # Attachment is valid for all languages
+            if attachment.language == '':
+                return_attachments.append(attachment)
+            else:
+                # IF self.languages is not setted, we make matching with default language
+                # ELSE we make matching with language of email_template
+                if not self.language:
+                    if attachment.language == settings.LANGUAGE_CODE:
+                        return_attachments.append(attachment)
+                else:
+                    if attachment.language == self.language:
+                        return_attachments.append(attachment)
+        return return_attachments
+
     def save(self, *args, **kwargs):
         # If template is a translation, use default template's name
         if self.default_template:
@@ -314,13 +347,18 @@ class Attachment(models.Model):
 
 @python_2_unicode_compatible
 class AttachmentTemplate(models.Model):
+    LANGUAGES_CHOICES = [(x, _(y)) for x, y in get_base_languages()]
+
     file = models.FileField(_('File'), upload_to=get_upload_path)
     name = models.CharField(_('Name'), max_length=255, help_text=_("The original filename"))
     email_templates = models.ManyToManyField(EmailTemplate, related_name='attachments',
                                     verbose_name=_('Email templates'))
     mimetype = models.CharField(max_length=255, default='', blank=True)
-
-    #template_emails = models.ManyToManyField(EmailTemplate, related_name='attachment_templates')
+    language = models.CharField(max_length=12,
+                                choices=LANGUAGES_CHOICES,
+                                verbose_name=_("Language"),
+                                help_text=_("Attachment in alternative language"),
+                                default='', blank=True)
 
     class Meta:
         app_label = 'post_office'
@@ -328,4 +366,4 @@ class AttachmentTemplate(models.Model):
         verbose_name_plural = _('Attachments Template')
 
     def __str__(self):
-        return self.name
+        return f"{self.name} - {dict(self.LANGUAGES_CHOICES).get(self.language)}"

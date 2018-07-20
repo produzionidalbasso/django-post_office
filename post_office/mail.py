@@ -57,15 +57,15 @@ def create(sender, recipients=None, cc=None, bcc=None, subject='', message='',
 
         if template:
             subject = template.subject or (template.default_template and template.default_template.subject) or ""
-            message = template.content or (template.default_template and template.default_template.content) or ""
             html_message = template.html_content or (template.default_template and template.default_template.html_content) or ""
 
         _context = Context(context or {})
         subject = Template(subject).render(_context)
-        message = Template(message).render(_context)
         html_message = Template(html_message).render(_context)
-        if template and message == html_message:
+        if template:
             message = transform_html_to_plain(html_message)
+        else:
+            message = Template(message).render(_context)
 
         email = Email(
             from_email=sender,
@@ -75,6 +75,7 @@ def create(sender, recipients=None, cc=None, bcc=None, subject='', message='',
             subject=subject,
             message=message,
             html_message=html_message,
+            template=template,
             scheduled_time=scheduled_time,
             headers=headers, priority=priority, status=status,
             backend_alias=backend
@@ -145,6 +146,16 @@ def send(recipients=None, sender=None, template=None, context=None, subject='',
     email = create(sender, recipients, cc, bcc, subject, message, html_message,
                    context, scheduled_time, headers, template, priority,
                    render_on_delivery, commit=commit, backend=backend)
+
+    # Getting attachment_template filtered for language
+    template_attachments = template.get_attachments()
+
+    # Update attachments with attachment_templates associated to email_template
+    for attachment in template_attachments:
+        if attachments:
+            attachments.update({attachment.name: attachment.file})
+        else:
+            attachments = {attachment.name: attachment.file}
 
     if attachments:
         attachments = create_attachments(attachments)

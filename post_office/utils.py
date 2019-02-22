@@ -99,11 +99,13 @@ def create_attachments(attachment_files):
             content = File(opened_file)
 
         attachment = apps.get_model('post_office.Attachment')
-        if mimetype:
-            attachment.mimetype = mimetype
-        attachment.file.save(filename, content=content, save=True)
+        if attachment:
+            attachment = attachment()
+            if mimetype:
+                attachment.mimetype = mimetype
+            attachment.file.save(filename, content=content, save=True)
 
-        attachments.append(attachment)
+            attachments.append(attachment)
 
         if opened_file is not None:
             opened_file.close()

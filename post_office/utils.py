@@ -222,7 +222,7 @@ def make_raw_template(template_path, content, block_name="content"):
     raw_template = "{{% extends '{template_path}' %}}".format(template_path=template_path)
     raw_template += load_string
     raw_template += ("{{% block {block_name} %}}{content}{{% endblock {block_name} %}}"
-                     "".format(content=content, block_name=block_name))
+                     "".format(content=content.encode('utf-8'), block_name=block_name))
     return raw_template
 
 def get_template_blocks(template_path="post_office/base_mail.html"):

@@ -232,7 +232,7 @@ class EmailTemplateAdminMixin(object):
                                          for _editor
                                          in postoffice_settings.get_wysiwyg_editors()]),
                               ImportWarning)
-        return super(EmailTemplateAdminMixin,self).formfield_for_dbfield(db_field, request, **kwargs)
+        return super(EmailTemplateAdminMixin,self).formfield_for_dbfield(db_field, **kwargs)
 
     def display_html_mail_preview(self,obj=None):
         content_preview = render_to_template_email(obj.html_content.replace('{{', '{').replace('}}', '}'), {},

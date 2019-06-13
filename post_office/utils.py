@@ -13,6 +13,7 @@ from .compat import string_types
 from .settings import get_default_priority, PRIORITY, STATUS
 from .validators import validate_email_with_name
 
+import inspect
 import warnings
 
 logger = logging.getLogger(__name__)
@@ -207,9 +208,12 @@ def make_raw_template(template_path, content, block_name="content"):
     # Fix for Django 1.8
     html = ''
     for loader in engine.template_loaders:
-        html, display_name = loader.load_template_source(
+        try:
+            html, display_name = loader.load_template_source(
             template_path, template_dirs)
-        break
+            break
+        except:
+            logger.exception("{0} - An error has occurred".format(inspect.currentframe().f_code.co_name))
 
     load_string = ""
     block_content_found = False

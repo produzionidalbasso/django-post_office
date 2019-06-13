@@ -13,6 +13,7 @@ from .compat import string_types
 from .settings import get_default_priority, PRIORITY, STATUS
 from .validators import validate_email_with_name
 
+import inspect
 import warnings
 
 logger = logging.getLogger(__name__)
@@ -192,6 +193,7 @@ def make_raw_template(template_path, content, block_name="content"):
     :param block_name:
     :return: template
     """
+    #template_path = template_path or "post_office/base_mail.html"
     from django.template import Context, Engine, TemplateDoesNotExist, loader
     from django.template.base import (
         TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,
@@ -202,11 +204,20 @@ def make_raw_template(template_path, content, block_name="content"):
     # from pygments.formatters import HtmlFormatter
     template_dirs = settings.TEMPLATES[0]['DIRS']
     engine = Engine.get_default()
-    html = engine.get_template(template_path).source
+
+    # Fix for Django 1.8
+    html = ''
+    for loader in engine.template_loaders:
+        try:
+            html, display_name = loader.load_template_source(
+            template_path, template_dirs)
+            break
+        except:
+            logger.exception("{0} - An error has occurred".format(inspect.currentframe().f_code.co_name))
 
     load_string = ""
     block_content_found = False
-    for token_block in Lexer(html).tokenize():
+    for token_block in Lexer(html, template_path).tokenize():
         if token_block.token_type == TOKEN_BLOCK:
             if token_block.split_contents()[0] == 'load':
                 load_string += "{{% {load_str} %}}".format(load_str=token_block.contents)
@@ -220,7 +231,7 @@ def make_raw_template(template_path, content, block_name="content"):
     raw_template = "{{% extends '{template_path}' %}}".format(template_path=template_path)
     raw_template += load_string
     raw_template += ("{{% block {block_name} %}}{content}{{% endblock {block_name} %}}"
-                     "".format(content=content, block_name=block_name))
+                     "".format(content=content.encode('utf-8'), block_name=block_name))
     return raw_template
 
 def get_template_blocks(template_path="post_office/base_mail.html"):

@@ -35,10 +35,9 @@ class AttachmentInline(admin.TabularInline):
     extra=0
 
     def display_attachment(self,obj):
-        if obj and obj.file:
-            return '<a href="{obj.file.url}" target="_blank">{obj.name}</a>'.format(obj=obj)
+        if obj and obj.attachment and obj.attachment.file:
+            return mark_safe('<a href="{0}" target="_blank">{1}</a>'.format(obj.attachment.file.url, obj.attachment.name))
         return '---'
-    display_attachment.allow_tags= True
 
 
 class AttachmentTemplateInline(admin.TabularInline):

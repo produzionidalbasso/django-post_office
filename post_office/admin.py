@@ -47,12 +47,11 @@ class AttachmentTemplateInline(admin.TabularInline):
     verbose_name = _("Email Attachment")
     verbose_name_plural = _("Email Attachments")
 
+    @mark_safe
     def display_attachment(self,obj):
         if obj and obj.file:
             return '<a href="{obj.file.url}" target="_blank">{obj.name}</a>'.format(obj=obj)
         return '---'
-    display_attachment.allow_tags= True
-
 
 
 class CommaSeparatedEmailWidget(TextInput):
@@ -68,7 +67,6 @@ class CommaSeparatedEmailWidget(TextInput):
         if isinstance(value, six.string_types):
             value = [value, ]
         return ','.join([item for item in value])
-
 
 
 class EmailAdmin(admin.ModelAdmin):
@@ -103,12 +101,11 @@ class EmailAdmin(admin.ModelAdmin):
     to_display.short_description = 'to'
     to_display.admin_order_field = 'to'
 
-
+    @mark_safe
     def display_mail_preview(self, obj):
         content = safe(obj.html_message)
-        return strip_spaces_between_tags(mark_safe("<div style='width:860px; '><iframe width='100%' height='350px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
-                            ".format(**{'mail_message': escape(strip_spaces_between_tags(content))})))
-    display_mail_preview.allow_tags = True
+        return strip_spaces_between_tags("<div style='width:860px; '><iframe width='100%' height='350px' srcdoc='{mail_message}'>PREVIEW</iframe></div>\
+                            ".format(**{'mail_message': escape(strip_spaces_between_tags(content))}))
     display_mail_preview.short_description = ugettext("Preview")
 
     def requeue(self, request, queryset):

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.core.files import File
 from django.template import Template, Context
+from django.template.base import TokenType
 from django.utils.encoding import force_text
 
 from post_office import cache
@@ -192,22 +193,18 @@ def make_raw_template(template_path, content, block_name="content"):
     :param block_name:
     :return: template
     """
-    from django.template import Context, Engine, TemplateDoesNotExist, loader
-    from django.template.base import (
-        TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,
-        Lexer)
-    from django.core.files.base import ContentFile
+    from django.template import Engine
+    from django.template.base import Lexer
     # from pygments import highlight
     # from pygments.lexers import HtmlDjangoLexer
     # from pygments.formatters import HtmlFormatter
-    template_dirs = settings.TEMPLATES[0]['DIRS']
     engine = Engine.get_default()
     html = engine.get_template(template_path).source
 
     load_string = ""
     block_content_found = False
     for token_block in Lexer(html).tokenize():
-        if token_block.token_type == TOKEN_BLOCK:
+        if token_block.token_type == TokenType.BLOCK:
             if token_block.split_contents()[0] == 'load':
                 load_string += "{{% {load_str} %}}".format(load_str=token_block.contents)
             elif (token_block.split_contents()[0] == 'block' and
@@ -225,10 +222,8 @@ def make_raw_template(template_path, content, block_name="content"):
 
 def get_template_blocks(template_path="post_office/base_mail.html"):
     from django.template import Context, Engine, TemplateDoesNotExist, loader
-    from django.template.base import (
-        TOKEN_BLOCK, TOKEN_COMMENT, TOKEN_TEXT, TOKEN_VAR, TRANSLATOR_COMMENT_MARK,
-        Lexer)
-    from django.core.files.base import ContentFile
+    from django.template.base import Lexer
+
     #from pygments import highlight
     #from pygments.lexers import HtmlDjangoLexer
     #from pygments.formatters import HtmlFormatter
@@ -236,7 +231,6 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
     engine = Engine(dirs=template_dirs)
     html = engine.get_template(template_path).source
 
-    #html = loader.get_template(template_path).render()
     _token_opened = False
     _token_closed = False
     _token_block_name = ''
@@ -268,7 +262,7 @@ def get_template_blocks(template_path="post_office/base_mail.html"):
         
         """
         _tokens = []
-        if t.token_type == TOKEN_BLOCK:
+        if t.token_type == TokenType.BLOCK:
             if t.split_contents()[0] == 'block':
                 _token_opened = True
                 _token_block_name = t.split_contents()[1]

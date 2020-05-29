@@ -240,7 +240,15 @@ class EmailTemplate(models.Model):
                                     help_text=_("The fields between '{{' and '}}' are the variables while the text that is included in the tags '{% comment%}' and '{% endcomment%}' will not be rendered in the mail \
                                                                                     <br/> Do not remove the fields included in the tags '{%' '%}'")
                                     )
-
+    header_image = models.ImageField(
+        upload_to="uploads/img",
+        verbose_name=_("Header Image"),
+        help_text=_("E' consigliabile inserire un'immgine con dimensioni 650x325"),
+        blank=True,
+        null=True,
+    )
+    sign = models.CharField(_('Sign'), max_length=500, blank=True,)
+    footer_text = models.TextField(_('Footer text'), blank=True,)
 
 
     objects = EmailTemplateManager()

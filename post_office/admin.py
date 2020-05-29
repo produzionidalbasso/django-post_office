@@ -268,6 +268,7 @@ class EmailTemplateInline(EmailTemplateAdminMixin,
     fieldsets = ((None, {
         'fields': (
             ('language', 'template_path','subject',),
+            ('header_image','sign','footer_text',),
             ('content_data',),
             ('display_html_mail_preview',),
         ),
@@ -304,6 +305,7 @@ class EmailTemplateAdmin(EmailTemplateAdminMixin,
         (None, {
             'fields': (
                 ('template_path','subject',),
+                ('header_image', 'sign', 'footer_text',),
                 ('content_data',),
                 ('display_html_mail_preview'),
             ),

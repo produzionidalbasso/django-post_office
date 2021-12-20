@@ -9,7 +9,6 @@ from django.conf import settings
 from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.db import models
 from django.template import Context, Template
-from django.utils.encoding import python_2_unicode_compatible
 from django.utils.translation import pgettext_lazy
 from django.utils.translation import ugettext_lazy as _
 from jsonfield import JSONField
@@ -26,9 +25,6 @@ from .validators import validate_email_with_name, validate_template_syntax
 logger = logging.getLogger(__name__)
 
 
-
-
-@python_2_unicode_compatible
 class Email(models.Model):
     """
     A model to hold email information.
@@ -175,7 +171,6 @@ class Email(models.Model):
         return super(Email, self).save(*args, **kwargs)
 
 
-@python_2_unicode_compatible
 class Log(models.Model):
     """
     A model to record sending email sending activities.
@@ -204,7 +199,6 @@ class EmailTemplateManager(models.Manager):
         return self.get(name=name, language=language, default_template=default_template)
 
 
-@python_2_unicode_compatible
 class EmailTemplate(models.Model):
     """
     Model to hold template information from db
@@ -292,7 +286,6 @@ def get_upload_path(instance, filename):
     return 'post_office_attachments/' + filename
 
 
-@python_2_unicode_compatible
 class Attachment(models.Model):
     """
     A model describing an email attachment.
@@ -312,7 +305,6 @@ class Attachment(models.Model):
         return self.name
 
 
-@python_2_unicode_compatible
 class AttachmentTemplate(models.Model):
     file = models.FileField(_('File'), upload_to=get_upload_path)
     name = models.CharField(_('Name'), max_length=255, help_text=_("The original filename"))

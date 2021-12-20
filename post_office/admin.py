@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError, ImproperlyConfigured
 from django.forms import BaseInlineFormSet, widgets
 from django.forms.widgets import TextInput
 from django.template.defaultfilters import safe
-from django.utils import six
+import six
 from django.utils.html import strip_spaces_between_tags, escape
 from django.utils.safestring import mark_safe
 from django.utils.text import Truncator
